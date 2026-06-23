@@ -393,7 +393,7 @@ function goTab(t){
 // ==========================================
 // THE NEW INSTANT WEBSOCKET ENGINE LINK
 // ==========================================
-const socket = new WebSocket('ws://localhost:8000/ws/signals');
+const socket = new WebSocket('wss://fno-edge.onrender.com/ws/signals');
 
 socket.onopen = function(e) {
   console.log("🟢 Connected to Python Engine");
