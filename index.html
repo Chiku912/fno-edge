@@ -119,8 +119,8 @@ html,body{background:#F0F4F8;color:#0F172A;font-family:-apple-system,BlinkMacSys
   </div>
 </div>
 
-<div class="fetch-bar" id="global-fetch" style="display:none">
-  <div class="spinner"></div><span id="global-fetch-txt">Loading pipelines...</span>
+<div class="fetch-bar" id="global-fetch">
+  <div class="spinner"></div><span id="global-fetch-txt">Awaiting connection to Engine...</span>
 </div>
 
 <div id="scroll">
@@ -189,7 +189,7 @@ var SD=[
 ["HCLTECH","HCLTECH.NS","HCL Technologies",1780,"IT",20,1],
 ["TATAMOTORS","TATAMOTORS.NS","Tata Motors Ltd",812,"Auto",10,1],
 ["MARUTI","MARUTI.NS","Maruti Suzuki India",13200,"Auto",200,1],
-["BAJFINANCE","BARELIANCE","Bajaj Finance",7200,"NBFC",100,1],
+["BAJFINANCE","BAJAJFINANCE.NS","Bajaj Finance",7200,"NBFC",100,1],
 ["BHARTIARTL","BHARTIARTL.NS","Bharti Airtel",1945,"Telecom",20,1],
 ["LT","LT.NS","Larsen & Toubro",3750,"Infra",50,1],
 ["ZOMATO","ZOMATO.NS","Zomato Ltd",295,"Consumer",5,2],
@@ -204,15 +204,7 @@ var stocks=[];
 var curTab='dash';
 var nFilter='ALL';
 var dSector='ALL';
-var isFetching=false;
 var unreadCount=0;
-
-var PROXIES=[
-  'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url=',
-  'https://api.codetabs.com/v1/proxy?quest='
-];
-var pIdx=0;
 
 // Black Scholes Mathematical Framework
 function ncdf(x){var t=1/(1+.2316419*Math.abs(x));var p=t*(.319381530+t*(-.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));var r=1-(1/Math.sqrt(2*Math.PI))*Math.exp(-x*x/2)*p;return x>=0?r:1-r;}
@@ -256,10 +248,10 @@ function initStocks(){
 // Global Core Real-time Ticker Engine
 function startStreaming(){
   setInterval(function(){
-    var batch=stocks.slice(0,25); // Processes clusters sequentially to ensure no dropped execution frames
+    var batch=stocks.slice(0,25); 
     batch.forEach(function(s){
       var seed=SD.find(function(x){return x[0]===s.sym;});
-      var delta=s.cmp*(Math.random()-0.5)*0.0012; // Continuous variance mapping
+      var delta=s.cmp*(Math.random()-0.5)*0.0012;
       s.cmp=Math.max(1,s.cmp+delta);
       s.change+=delta;
       s.changePct=(s.change/s.cmp)*100;
@@ -277,64 +269,11 @@ function startStreaming(){
   },1500);
 }
 
-// 15–30s High-Velocity Corporate Wire Interceptor
-function fetchLiveAnnouncements(){
-  var loader=document.getElementById('global-fetch');
-  if(loader)loader.style.display='flex';
-  
-  var today=new Date();
-  var dd=String(today.getDate()).padStart(2,'0');
-  var mm=String(today.getMonth()+1).padStart(2,'0');
-  var url='https://www.nseindia.com/api/corporate-announcements?index=equities&from_date='+dd+'-'+mm+'-'+today.getFullYear()+'&to_date='+dd+'-'+mm+'-today.getFullYear()';
-  
-  var activeProxy=PROXIES[pIdx];
-  var xhr=new XMLHttpRequest();
-  xhr.open('GET',activeProxy+encodeURIComponent(url),true);
-  xhr.timeout=6000;
-  xhr.onload=function(){
-    if(loader)loader.style.display='none';
-    if(xhr.status===200){
-      try{
-        var res=JSON.parse(xhr.responseText);
-        if(res.contents)res=JSON.parse(res.contents);
-        var data=Array.isArray(res)?res:(res.data||[]);
-        if(data.length>0)parseWire(data);
-      }catch(e){fallbackSignals();}
-    }else{switchProxy();}
-  };
-  xhr.onerror=function(){if(loader)loader.style.display='none';switchProxy();};
-  xhr.send();
-}
-
-function switchProxy(){pIdx=(pIdx+1)%PROXIES.length;}
-
-function parseWire(items){
-  var temp=[];
-  items.slice(0,20).forEach(function(item,i){
-    var symbol=item.symbol||'F&O';
-    var text=item.desc||item.subject||'System structural corporate update';
-    var textLower=text.toLowerCase();
-    var level='R';
-    if(/merger|acquisition|dividend|earnings|ban|takeover/i.test(textLower))level='C';
-    else if(/board meeting|expansion|order|allotment/i.test(textLower))level='M';
-    
-    temp.push({
-      id:2000+i,sym:symbol,impact:level,
-      title:text.substring(0,70)+'...',
-      body:text,ago:'Instant',
-      pi:level==='C'?'+3.5%':level==='M'?'+1.2%':'±0.2%'
-    });
-  });
-  NOTIFS=temp;
-  unreadCount=NOTIFS.length;
-  updateSignalUI();
-}
-
 function fallbackSignals(){
   NOTIFS=[
-    {id:1,sym:"RELIANCE",impact:"C",title:"Board confirms execution of clean-energy vertical demerger ratio",body:"Unlocking value for standard shareholders. Strategic impact on near 2850 CE chain premiums.",ago:"18s ago",pi:"+4.2%"},
-    {id:2,sym:"HDFCBANK",impact:"C",title:"Earnings outperform guidance matrix by 6.4%",body:"Net interest margins expanding. High density long build up logged at nearest strikes.",ago:"24s ago",pi:"+3.1%"},
-    {id:3,sym:"SBIN",impact:"M",title:"To evaluate debt capital raising options via tier-2 bonds issuance",body:"Board assembly scheduled for compliance review. Trend remains stable inside standard variance.",ago:"45s ago",pi:"+1.1%"}
+    {id:1,sym:"RELIANCE",impact:"C",title:"Board confirms execution of clean-energy vertical demerger ratio",body:"Unlocking value for standard shareholders. Strategic impact on near 2850 CE chain premiums.",ago:"Initial Data",pi:"+4.2%"},
+    {id:2,sym:"HDFCBANK",impact:"C",title:"Earnings outperform guidance matrix by 6.4%",body:"Net interest margins expanding. High density long build up logged at nearest strikes.",ago:"Initial Data",pi:"+3.1%"},
+    {id:3,sym:"SBIN",impact:"M",title:"To evaluate debt capital raising options via tier-2 bonds issuance",body:"Board assembly scheduled for compliance review. Trend remains stable inside standard variance.",ago:"Initial Data",pi:"+1.1%"}
   ];
   unreadCount=NOTIFS.length;
   updateSignalUI();
@@ -451,13 +390,55 @@ function goTab(t){
   if(t==='notifs'){unreadCount=0;var b=document.getElementById('nbadge');if(b)b.className='nbadge';}
 }
 
+// ==========================================
+// THE NEW INSTANT WEBSOCKET ENGINE LINK
+// ==========================================
+const socket = new WebSocket('ws://localhost:8000/ws/signals');
+
+socket.onopen = function(e) {
+  console.log("🟢 Connected to Python Engine");
+  document.getElementById('global-fetch').style.display = 'none';
+};
+
+socket.onmessage = function(event) {
+  // A new announcement just hit the wire from your Python server!
+  const msg = JSON.parse(event.data);
+  
+  if (msg.type === "NEW_SIGNAL") {
+    const newSignal = msg.data;
+    
+    const formattedNotif = {
+      id: Date.now(),
+      sym: newSignal.sym,
+      impact: newSignal.impact,
+      title: newSignal.title,
+      body: newSignal.body,
+      ago: "Just now", 
+      pi: newSignal.impact === 'C' ? '+3.5%' : '+1.2%'
+    };
+    
+    // Push to the top of the list instantly
+    NOTIFS.unshift(formattedNotif);
+    unreadCount++;
+    
+    // Trigger immediate UI refresh
+    updateSignalUI();
+  }
+};
+
+socket.onclose = function(event) {
+  console.log("🔴 Engine disconnected.");
+  document.getElementById('global-fetch').style.display = 'flex';
+  document.getElementById('global-fetch-txt').textContent = "Disconnected from server. Retrying...";
+};
+
+
 // System Init Orchestration
 initStocks();
 buildSectors();
 renderDash();
 startStreaming();
-fallbackSignals();
-setInterval(fetchLiveAnnouncements,25000); // Polls every 25s loop
+fallbackSignals(); // Loads some dummy data so the screen isn't empty
 
 var ist=new Date(Date.now()+5.5*3600000);
 document.getElementById('clock').textContent=ist.getUTCHours().toString().padStart(2,'0')+':'+ist.getUTCMinutes().toString().padStart(2,'0')+' IST';
