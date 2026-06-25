@@ -1,20 +1,9 @@
 import asyncio
 import json
-import os
 import time
 from fastapi import FastAPI, WebSocket
 import uvicorn
 import requests
-import google.generativeai as genai
-
-# SECURE WAY: Pulling the key from Render's hidden environment variables
-API_KEY = os.environ.get("GEMINI_API_KEY")
-
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-    ai_model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    ai_model = None
 
 app = FastAPI()
 connected_clients = set()
@@ -40,16 +29,10 @@ def fetch_nse_data():
         print(f"Fetch error: {e}")
     return []
 
-def generate_ai_summary(text):
-    """Generates a concise 1-sentence summary"""
-    if not ai_model or len(text) < 30:
-        return text
-    try:
-        prompt = f"Summarize this stock filing in 1 crisp sentence focusing on price impact and metrics: {text}"
-        response = ai_model.generate_content(prompt)
-        return "🤖 AI Summary: " + response.text.replace('\n', ' ').strip()
-    except Exception:
-        return text
+# Health check route so your Render URL shows a green status instead of a 404 Error!
+@app.get("/")
+async def root():
+    return {"status": "🟢 FNO Live Engine is Running Perfectly!"}
 
 @app.websocket("/ws/signals")
 async def websocket_endpoint(websocket: WebSocket):
@@ -81,11 +64,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     "id": stable_id,
                     "sym": symbol,
                     "title": raw_desc[:70] + "...",
-                    "body": generate_ai_summary(raw_desc),
+                    "body": raw_desc, # Sent raw to UI; the HTML file now handles the AI summary
                     "impact": "C" if "dividend" in raw_desc.lower() or "result" in raw_desc.lower() else "M",
                     "ago": item.get('attchmntText', 'Filing'),
                     "ts": epoch_ms,
-                    "l3": an_dt[11:16], # Extract HH:MM directly
+                    "l3": an_dt[11:16] if len(an_dt) > 15 else "Live", 
                     "pdf": item.get('attchmntFile', '') # Exact PDF URL for 1-Tap viewing
                 }
             }
@@ -122,11 +105,11 @@ async def instant_nse_fetcher():
                             "id": stable_id,
                             "sym": symbol,
                             "title": raw_desc[:70] + "...",
-                            "body": generate_ai_summary(raw_desc),
+                            "body": raw_desc,
                             "impact": "C" if "dividend" in raw_desc.lower() or "result" in raw_desc.lower() else "M",
                             "ago": "Just now",
                             "ts": int(time.time() * 1000),
-                            "l3": an_dt[11:16],
+                            "l3": an_dt[11:16] if len(an_dt) > 15 else "Live",
                             "pdf": latest.get('attchmntFile', '')
                         }
                     }
