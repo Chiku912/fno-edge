@@ -912,20 +912,22 @@ function renderHistory(){
 }
 
 // ══════════════════════════════════════════
-// WEBSOCKET ENGINE INTEGRATION
+// WEBSOCKET ENGINE INTEGRATION (STABLE PATCH)
 // ══════════════════════════════════════════
 function setupWebSocket() {
   const ws = new WebSocket('wss://fno-edge.onrender.com/ws/signals');
 
   ws.onopen = function() {
     showBar('sig-bar', false); 
+    console.log("🟢 Connected to Live Stable Pipeline");
   };
 
   ws.onmessage = function(event) {
     const msg = JSON.parse(event.data);
     if (msg.type === "NEW_SIGNAL") {
       var n = msg.data;
-      // Prevent duplicates
+      
+      // Check if item already exists in local record history to protect data integrity
       if(!SIGNALS.some(function(s){return s.id === n.id;})) {
         var newItem = {
           id: n.id,
@@ -934,18 +936,21 @@ function setupWebSocket() {
           impact: n.impact,
           l1: 'Corporate Action',
           l2: 'NSE Filing',
-          l3: new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
+          l3: n.l3 || new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
           title: n.title,
           body: n.body,
           src: 'Live Engine',
-          ts: Date.now(),
+          ts: n.ts || Date.now(), // Employs unalterable server epoch timestamps
           read: false,
           tags: [n.sym, 'Live Filing'],
           pdfUrl: '',
           quickSummary: quickSummary(n.title, n.body, n.impact, n.sym)
         };
+        
+        // Add to active stack monitor and archive to local browser history
         SIGNALS.unshift(newItem);
         saveToHistory([newItem]);
+        
         if(curTab === 'signals') renderSignals();
         updateBadge();
       }
@@ -953,8 +958,8 @@ function setupWebSocket() {
   };
 
   ws.onclose = function() {
-    showBar('sig-bar', 'err', 'Disconnected from Live Engine. Reconnecting...');
-    setTimeout(setupWebSocket, 5000);
+    showBar('sig-bar', 'err', 'Connecting to Engine... (Render takes ~50s if sleeping)');
+    setTimeout(setupWebSocket, 5000); // Robust retry handler
   };
 }
 
