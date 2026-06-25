@@ -29,7 +29,7 @@ def fetch_nse_data():
         print(f"Fetch error: {e}")
     return []
 
-# Health check route so your Render URL shows a green status instead of a 404 Error!
+# Health check route so your Render URL shows a green status instead of a 404 Error
 @app.get("/")
 async def root():
     return {"status": "🟢 FNO Live Engine is Running Perfectly!"}
