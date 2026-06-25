@@ -7,6 +7,7 @@ import uvicorn
 import requests
 import google.generativeai as genai
 
+# SECURE WAY: Pulling the key from Render's hidden environment variables
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if API_KEY:
@@ -18,13 +19,15 @@ else:
 app = FastAPI()
 connected_clients = set()
 
+# Act like a real Chrome browser to bypass NSE bot detection
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Connection": "keep-alive"
 }
 
 def fetch_nse_data():
+    """Fetches data using a session to manage cookies properly"""
     session = requests.Session()
     session.headers.update(HEADERS)
     try:
@@ -33,11 +36,12 @@ def fetch_nse_data():
         response = session.get(url, timeout=5)
         if response.status_code == 200:
             return response.json()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Fetch error: {e}")
     return []
 
 def generate_ai_summary(text):
+    """Generates a concise 1-sentence summary"""
     if not ai_model or len(text) < 30:
         return text
     try:
@@ -52,7 +56,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
     
+    print("New client connected. Fetching initial batch of 50...")
     initial_data = fetch_nse_data()
+    
     if initial_data:
         # Loop backwards from oldest to newest to preserve chronological stack execution order
         for item in reversed(initial_data[:50]):
@@ -60,7 +66,7 @@ async def websocket_endpoint(websocket: WebSocket):
             symbol = item.get('symbol', 'NSE')
             an_dt = item.get('an_dt', '')
             
-            # FIXED: Create an unalterable stable unique ID using the official exchange filing timestamp
+            # Create an unalterable stable unique ID using the official exchange filing timestamp
             stable_id = f"nse_{symbol}_{an_dt}".replace(" ", "_").replace(":", "-")
             
             # Map structural epoch milliseconds from exchange string representation
@@ -79,11 +85,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     "impact": "C" if "dividend" in raw_desc.lower() or "result" in raw_desc.lower() else "M",
                     "ago": item.get('attchmntText', 'Filing'),
                     "ts": epoch_ms,
-                    "l3": an_dt[11:16] # Extract HH:MM directly
+                    "l3": an_dt[11:16], # Extract HH:MM directly
+                    "pdf": item.get('attchmntFile', '') # Exact PDF URL for 1-Tap viewing
                 }
             }
             await websocket.send_text(json.dumps(payload))
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.04) # Slight delay to render smoothly
             
     try:
         while True:
@@ -92,13 +99,18 @@ async def websocket_endpoint(websocket: WebSocket):
         connected_clients.remove(websocket)
 
 async def instant_nse_fetcher():
+    """Background loop waiting for brand NEW announcements"""
     last_filing_time = None
+    
     while True:
-        if connected_clients: 
+        if connected_clients: # Only fetch if someone has the app open
             data = fetch_nse_data()
             if data:
                 latest = data[0]
+                
+                # If there is a brand new filing, push it instantly
                 if latest.get('an_dt') != last_filing_time and last_filing_time is not None:
+                    print(f"🚨 NEW SIGNAL DETECTED: {latest.get('symbol')}")
                     raw_desc = str(latest.get('desc', ''))
                     symbol = latest.get('symbol', 'NSE')
                     an_dt = latest.get('an_dt', '')
@@ -114,13 +126,16 @@ async def instant_nse_fetcher():
                             "impact": "C" if "dividend" in raw_desc.lower() or "result" in raw_desc.lower() else "M",
                             "ago": "Just now",
                             "ts": int(time.time() * 1000),
-                            "l3": an_dt[11:16]
+                            "l3": an_dt[11:16],
+                            "pdf": latest.get('attchmntFile', '')
                         }
                     }
                     for client in connected_clients:
                         await client.send_text(json.dumps(payload))
+                
                 last_filing_time = latest.get('an_dt')
-        await asyncio.sleep(15) 
+                
+        await asyncio.sleep(15) # Check every 15 seconds
 
 @app.on_event("startup")
 async def startup_event():
