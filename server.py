@@ -2,46 +2,58 @@ import asyncio
 import json
 import time
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import requests
 
 app = FastAPI()
-connected_clients = set()
 
-# Use a real browser header so BSE doesn't block the request
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def fetch_bse_data():
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+# Fetches latest 30 announcements
+def get_announcements():
     try:
-        # Direct BSE API fetch - No proxy needed here
         url = "https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w?pageno=1&strType=C&critearea=&scripcode=&Flag=0&Promoter=&SequenceSort="
         response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            return response.json().get('Table', [])
-    except Exception as e:
-        print(f"Backend Fetch Error: {e}")
-    return []
+        return response.json().get('Table', [])[:30]
+    except: return []
+
+# Fetches Corporate Actions
+def get_calendar():
+    try:
+        url = "https://api.bseindia.com/BseIndiaAPI/api/CorpAct/w?scripcode=&Purposecode=&fromDate=&toDate=&Flag=0&Industry=&SequenceSort="
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        return response.json().get('Table', [])[:30]
+    except: return []
 
 @app.websocket("/ws/signals")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    connected_clients.add(websocket)
-    data = fetch_bse_data()
-    for item in reversed(data[:30]):
-        payload = {
-            "type": "NEW_SIGNAL",
-            "data": {
-                "id": str(item.get('NEWSID')),
-                "sym": (item.get('SLONGNAME') or 'MARKET').split(' ')[0],
-                "title": item.get('HEADLINE', ''),
-                "body": item.get('HEADLINE', ''),
-                "ts": int(time.time() * 1000),
-                "pdf": f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{item.get('ATTACHMENTNAME','')}"
-            }
-        }
-        await websocket.send_text(json.dumps(payload))
+    while True:
+        data = get_announcements()
+        for item in reversed(data):
+            await websocket.send_json({
+                "type": "NEW_SIGNAL",
+                "data": {
+                    "id": str(item.get('NEWSID')),
+                    "sym": (item.get('SLONGNAME') or 'MARKET').split(' ')[0],
+                    "title": item.get('HEADLINE', ''),
+                    "body": item.get('HEADLINE', ''),
+                    "pdf": f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{item.get('ATTACHMENTNAME','')}"
+                }
+            })
+        await asyncio.sleep(60)
+
+@app.get("/api/calendar")
+async def calendar_api():
+    return {"data": get_calendar()}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
