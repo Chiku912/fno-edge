@@ -2,39 +2,67 @@ import asyncio
 import json
 import time
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import requests
 
 app = FastAPI()
+
+# Allow the frontend to securely access this backend without CORS errors
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 connected_clients = set()
 
+# Native browser spoofing to bypass Exchange firewalls
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
     "Origin": "https://www.bseindia.com",
     "Referer": "https://www.bseindia.com/"
 }
 
 def fetch_exchange_data():
+    """Fetches Live Announcements"""
     try:
         url = f"https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w?pageno=1&strType=C&critearea=&scripcode=&Flag=0&Promoter=&SequenceSort=&_rnd={time.time()}"
         response = requests.get(url, headers=HEADERS, timeout=12)
         if response.status_code == 200:
-            data = response.json()
-            return data.get('Table', [])
+            return response.json().get('Table', [])
     except Exception as e:
-        print(f"BSE Engine Fetch error: {e}")
+        print(f"Announcement Fetch Error: {e}")
+    return []
+
+def fetch_calendar_data():
+    """Fetches Upcoming Corporate Actions"""
+    try:
+        url = f"https://api.bseindia.com/BseIndiaAPI/api/CorpAct/w?scripcode=&Purposecode=&fromDate=&toDate=&Flag=0&Industry=&SequenceSort=&_rnd={time.time()}"
+        response = requests.get(url, headers=HEADERS, timeout=12)
+        if response.status_code == 200:
+            return response.json().get('Table', [])
+    except Exception as e:
+        print(f"Calendar Fetch Error: {e}")
     return []
 
 @app.get("/")
 async def root():
-    return {"status": "🟢 FNO Live Engine Active (Plan B Mode)"}
+    return {"status": "🟢 FNO Edge Live Engine Active (Plan B)"}
+
+@app.get("/api/calendar")
+async def get_calendar():
+    """Hosts the calendar data securely for the frontend to consume"""
+    return {"data": fetch_calendar_data()}
 
 def format_payload(item):
-    raw_desc = item.get('HEADLINE', '')
-    symbol = item.get('SLONGNAME', 'MARKET').split(' ')[0][:10].upper()
-    news_id = item.get('NEWSID', '')
+    raw_desc = item.get('HEADLINE') or item.get('NEWS_SUB') or ''
+    # Send the full name so the frontend can securely map it to the F&O list
+    sym_name = (item.get('SLONGNAME') or item.get('Security_Name') or item.get('scrip_name') or 'MARKET').upper()
+    news_id = item.get('NEWSID', str(int(time.time())))
     dt_str = item.get('NEWS_DT', '')
     
     try:
@@ -50,7 +78,7 @@ def format_payload(item):
         "type": "NEW_SIGNAL",
         "data": {
             "id": f"bse_{news_id}",
-            "sym": symbol,
+            "symName": sym_name,
             "title": raw_desc,
             "body": raw_desc,
             "impact": impact,
@@ -63,10 +91,10 @@ def format_payload(item):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
-    print(f"Frontend linked successfully. Active Clients: {len(connected_clients)}")
     
     initial_data = fetch_exchange_data()
     if initial_data:
+        # Pushes the latest 30 announcements immediately on load
         for item in reversed(initial_data[:30]):
             payload = format_payload(item)
             await websocket.send_text(json.dumps(payload))
