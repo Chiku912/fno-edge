@@ -1,38 +1,39 @@
 import asyncio
-import json
 import time
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 import requests
+import uvicorn
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# BSE data is public; no complex proxying needed on the server side
+# BSE API is the most reliable source for both NSE/BSE filings
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+cache = {"signals": [], "calendar": []}
 
-def fetch_exchange_data():
-    try:
-        # Latest 40 announcements from BSE
-        url = "https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w?pageno=1&strType=C&critearea=&scripcode=&Flag=0&Promoter=&SequenceSort="
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        return response.json().get('Table', [])[:40]
-    except Exception as e:
-        print(f"BSE Fetch Error: {e}")
-        return []
+def fetch_data():
+    while True:
+        try:
+            # 1. Signals (Announcements)
+            ann_url = "https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w?pageno=1&strType=C"
+            cache["signals"] = requests.get(ann_url, headers=HEADERS, timeout=10).json().get('Table', [])
+            
+            # 2. Corporate Actions (Calendar)
+            cal_url = "https://api.bseindia.com/BseIndiaAPI/api/CorpAct/w?scripcode=&Purposecode="
+            cache["calendar"] = requests.get(cal_url, headers=HEADERS, timeout=10).json().get('Table', [])
+        except: pass
+        time.sleep(120)
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(asyncio.to_thread(fetch_data))
 
 @app.get("/api/signals")
-async def get_signals():
-    return {"data": fetch_exchange_data()}
+async def get_signals(): return {"data": cache["signals"][:50]}
 
 @app.get("/api/calendar")
-async def get_calendar():
-    try:
-        url = "https://api.bseindia.com/BseIndiaAPI/api/CorpAct/w?scripcode=&Purposecode=&fromDate=&toDate=&Flag=0&Industry=&SequenceSort="
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        return {"data": response.json().get('Table', [])[:30]}
-    except: return {"data": []}
+async def get_calendar(): return {"data": cache["calendar"][:50]}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
