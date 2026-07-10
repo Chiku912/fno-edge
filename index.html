@@ -1,39 +1,72 @@
-// 1. FIX GEMINI ENDPOINT
-function executeDeepGemini(prompt, cb) {
-  var key = getSetting('gemini');
-  if(!key) { cb({error: 'No Key'}); return; }
-  
-  // Changed from v1beta to v1
-  var url = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=' + key;
-  
-  fetch(url, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-  })
-  .then(res => res.json())
-  .then(data => {
-     if(data.error) cb({error: data.error.message});
-     else cb({text: data.candidates[0].content.parts[0].text.trim()});
-  })
-  .catch(err => cb({error: 'Connection Timed Out'}));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>FNO Edge</title>
+<style>
+body{background:#F8FAFC;font-family:system-ui;margin:0;padding:0}
+.tab{display:none;padding:15px;padding-bottom:80px}
+.tab.active{display:block}
+.card{background:#fff;padding:15px;margin-bottom:10px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.nav{position:fixed;bottom:0;width:100%;display:flex;background:#fff;border-top:1px solid #e2e8f0}
+.nav-item{flex:1;text-align:center;padding:15px;font-size:12px;font-weight:600;cursor:pointer}
+.crit{border-left:4px solid #ef4444}
+.ai-btn{background:#dcfce7;color:#166534;padding:5px 10px;border-radius:5px;font-size:10px;display:inline-block;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="scr">
+    <div id="tab-signals" class="tab active">
+        <div id="sig-list"></div>
+    </div>
+    <div id="tab-history" class="tab">
+        <input type="text" id="hist-srch" class="srch" placeholder="Filter history..." oninput="renderHistory()"/>
+        <div id="hist-list"></div>
+    </div>
+    <div id="tab-calendar" class="tab">
+        <div id="cal-list"></div>
+    </div>
+</div>
+
+<div class="nav">
+    <div class="nav-item" onclick="switchTab('tab-signals')">🔔 Alerts</div>
+    <div class="nav-item" onclick="switchTab('tab-history')">📁 History</div>
+    <div class="nav-item" onclick="switchTab('tab-calendar')">📅 Calendar</div>
+</div>
+
+<script>
+const BACKEND = 'https://fno-edge.onrender.com';
+
+function switchTab(id) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
 }
 
-// 2. FIX CALENDAR FETCH (Direct from your backend, NO PROXY)
-async function fetchCalendarData() {
-  showBar('cal-bar','loading','Fetching upcoming dates...');
-  try {
-      // Connects directly to your Render backend - No firewall issues
-      const res = await fetch('https://fno-edge.onrender.com/api/calendar');
-      const json = await res.json();
-      CALENDAR = json.data.map(item => ({
-          sym: (item.Security_Name || item.scrip_name || '').split(' ')[0],
-          purpose: item.Purpose || item.HEADLINE || '',
-          dStr: item.ExDate || item.ex_date || 'N/A',
-          date: new Date(item.ExDate || item.ex_date || Date.now())
-      }));
-      renderCalendar();
-      document.getElementById('cal-bar').style.display = 'none';
-  } catch(e) { 
-      showBar('cal-bar', 'err', 'Backend Connection Failed'); 
-  }
+async function loadData() {
+    // Fetch from your backend (no proxy errors)
+    const sigRes = await fetch(BACKEND + '/api/signals');
+    const signals = (await sigRes.json()).data;
+    
+    const list = document.getElementById('sig-list');
+    list.innerHTML = signals.map(s => `
+        <div class="card ${s.HEADLINE.match(/dividend|result/i) ? 'crit' : ''}">
+            <b>${(s.SLONGNAME||'').split(' ')[0]}</b><br>${s.HEADLINE}<br>
+            <div style="margin-top:10px">
+                <a href="https://www.bseindia.com/xml-data/corpfiling/AttachLive/${s.ATTACHMENTNAME}" target="_blank">📄 PDF</a>
+                <span class="ai-btn" onclick="summarize('${s.NEWSID}')">🤖 AI Summary</span>
+                <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Review:${s.SLONGNAME}&details=${s.HEADLINE}" target="_blank">📅 GCal</a>
+            </div>
+            <div id="sum-${s.NEWSID}"></div>
+        </div>
+    `).join('');
 }
+
+function summarize(id) {
+    document.getElementById('sum-'+id).innerHTML = "<i>Analyzing with AI...</i>";
+    // Logic to call Gemini API goes here
+}
+
+loadData();
+</script>
+</body>
+  </html>
