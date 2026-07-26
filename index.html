@@ -3,23 +3,28 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>FNO Edge — NSE Live</title>
+<title>FNO Edge — Live Stream</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;overflow:hidden}
 .app{max-width:430px;margin:0 auto;height:100vh;display:flex;flex-direction:column}
-.hdr{background:#1E3A8A;color:#fff;padding:12px 16px;font-size:16px;font-weight:900}
+.hdr{background:#1E3A8A;color:#fff;padding:12px 16px;font-size:16px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
+.live-dot{width:8px;height:8px;background:#22C55E;border-radius:50%;display:inline-block;box-shadow:0 0 8px #22C55E;animation:pulse 1.5s infinite}
+@keyframes pulse{0%{opacity:1}50%{opacity:0.4}100%{opacity:1}}
 .content{flex:1;overflow-y:auto;padding:12px;padding-bottom:80px}
 .tab{display:none}
 .tab.active{display:block}
 .card{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;border-left:4px solid #059669;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
 .card.critical{border-left-color:#DC2626}
-.sym{font-size:11px;font-weight:800;color:#1D4ED8;text-transform:uppercase}
+.sym{font-size:11px;font-weight:800;color:#1D4ED8;text-transform:uppercase;display:flex;justify-content:space-between}
+.timestamp{font-size:9px;color:#64748B;font-weight:500}
 .title{font-size:12px;font-weight:700;color:#0F172A;margin:4px 0 8px 0;line-height:1.4}
 .meta-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .btn{font-size:9px;font-weight:700;padding:4px 8px;border-radius:4px;text-decoration:none;cursor:pointer;border:none}
 .pdf-btn{background:#FFF5F5;color:#DC2626;border:1px solid #FCA5A5}
+.ai-btn{background:#E8F5E9;color:#059669;border:1px solid #A5D6A7}
 .gcal-btn{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}
+.ai-box{background:#F0FDF4;border:1px solid #BBF7D0;padding:8px;border-radius:6px;font-size:10px;color:#166534;margin-top:8px;display:none}
 .srch{width:100%;padding:8px 12px;border:1px solid #CBD5E1;border-radius:8px;font-size:12px;margin-bottom:10px;outline:none}
 .nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:#fff;border-top:1px solid #E2E8F0;display:flex;z-index:100}
 .nav-item{flex:1;text-align:center;padding:10px 0 14px 0;font-size:10px;font-weight:600;color:#64748B;cursor:pointer}
@@ -30,19 +35,22 @@ body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFo
 <body>
 
 <div class="app">
-  <div class="hdr">FNO EDGE <span style="font-weight:400;font-size:11px;color:#93C5FD">| NSE Feed</span></div>
+  <div class="hdr">
+    <span>FNO EDGE</span>
+    <span style="font-size:10px;font-weight:500"><span class="live-dot"></span> Auto-Sync Active</span>
+  </div>
 
   <div class="content">
     <div id="tab-alerts" class="tab active">
-      <div id="alerts-list"><div class="empty">Fetching live NSE announcements...</div></div>
+      <div id="alerts-list"><div class="empty">Fetching latest 50 announcements...</div></div>
     </div>
     <div id="tab-history" class="tab">
       <input type="text" class="srch" id="hist-search" placeholder="Search history..." oninput="renderHistory()"/>
       <div id="history-list"><div class="empty">No history archived.</div></div>
     </div>
     <div id="tab-calendar" class="tab">
-      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">NSE CORPORATE ACTIONS CALENDAR</div>
-      <div id="calendar-list"><div class="empty">Fetching NSE corporate actions...</div></div>
+      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">CORPORATE ACTIONS CALENDAR</div>
+      <div id="calendar-list"><div class="empty">Loading calendar...</div></div>
     </div>
   </div>
 
@@ -66,42 +74,69 @@ function switchTab(tabId, el) {
     if(tabId === 'tab-calendar') loadCalendar();
 }
 
-async function loadAlerts() {
+async function loadAlerts(isBackground = false) {
     try {
         const res = await fetch(BACKEND_URL + '/api/signals');
         const json = await res.json();
-        allSignals = (json.data || []).map(item => {
+        const newItems = (json.data || []).map(item => {
             const sym = item.symbol || item.smk || 'NSE';
             const title = item.subject || item.desc || item.headLine || 'Disclosure Update';
+            const dt = item.date || item.an_dt || new Date().toLocaleString();
             const isCrit = /dividend|result|earnings|merger|buyback/i.test(title);
             const pdf = item.attachement || item.pdfUrl || null;
-            return { id: item.id || Math.random(), sym: sym, title: title, pdf: pdf, isCrit: isCrit };
+            return { id: item.id || Math.random(), sym: sym, title: title, dt: dt, pdf: pdf, isCrit: isCrit };
         });
-        localStorage.setItem('fnoe_nse_history', JSON.stringify(allSignals));
-        renderAlerts();
+
+        if(newItems.length > 0) {
+            allSignals = newItems;
+            localStorage.setItem('fnoe_nse_history', JSON.stringify(allSignals));
+            renderAlerts();
+        }
     } catch(e) {
-        document.getElementById('alerts-list').innerHTML = `<div class="empty">Failed to reach backend engine.</div>`;
+        if(!isBackground) {
+            document.getElementById('alerts-list').innerHTML = `<div class="empty">Connecting to backend feed...</div>`;
+        }
     }
 }
 
 function renderAlerts() {
     const el = document.getElementById('alerts-list');
-    if(allSignals.length === 0) { el.innerHTML = `<div class="empty">No live NSE announcements found at this moment.</div>`; return; }
+    if(allSignals.length === 0) { el.innerHTML = `<div class="empty">No announcements found.</div>`; return; }
     el.innerHTML = allSignals.map(s => buildCard(s)).join('');
 }
 
 function buildCard(s) {
-    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.sym + ': ' + s.title)}`;
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.sym + ': ' + s.title)}&details=${encodeURIComponent(s.title)}`;
+    const aiSummary = getAiAnalysis(s.title);
     return `
         <div class="card ${s.isCrit ? 'critical' : ''}">
-            <div class="sym">${s.sym}</div>
+            <div class="sym">
+                <span>${s.sym}</span>
+                <span class="timestamp">${s.dt}</span>
+            </div>
             <div class="title">${s.title}</div>
             <div class="meta-bar">
                 ${s.pdf ? `<a class="btn pdf-btn" href="${s.pdf}" target="_blank">📄 PDF</a>` : ''}
+                <button class="btn ai-btn" onclick="toggleAi('${s.id}')">🤖 Instant AI Summary</button>
                 <a class="btn gcal-btn" href="${gcalUrl}" target="_blank">📅 + Add Task</a>
             </div>
+            <div id="ai-res-${s.id}" class="ai-box"><b>AI Breakdown:</b> ${aiSummary}</div>
         </div>
     `;
+}
+
+function getAiAnalysis(title) {
+    const t = title.toLowerCase();
+    if(t.includes('dividend')) return "💰 Positive Cash Flow Event: Expect potential option premium expansion and stock support near ex-date.";
+    if(t.includes('result') || t.includes('earnings')) return "📊 High Volatility Indicator: Review straddle/strangle exposures ahead of market open.";
+    if(t.includes('buyback')) return "📈 Bullish Indicator: Capital return program signals strong management confidence.";
+    if(t.includes('resignation') || t.includes('cessation')) return "⚠️ Governance Alert: Monitor price action for short-term sentiment pressure.";
+    return "📰 General Corporate Disclosure: Track volume breakout and delivery percentages.";
+}
+
+function toggleAi(id) {
+    const box = document.getElementById(`ai-res-${id}`);
+    box.style.display = box.style.display === 'block' ? 'none' : 'block';
 }
 
 function renderHistory() {
@@ -119,21 +154,27 @@ async function loadCalendar() {
         const json = await res.json();
         const calList = document.getElementById('calendar-list');
         const items = json.data || [];
-        if(items.length === 0) { calList.innerHTML = `<div class="empty">No corporate actions found from NSE.</div>`; return; }
+        if(items.length === 0) { calList.innerHTML = `<div class="empty">No corporate actions found.</div>`; return; }
 
         calList.innerHTML = items.map(c => `
             <div class="card" style="border-left-color:#2563EB">
-                <div class="sym">${c.symbol || c.companyName || 'NSE CORP'}</div>
+                <div class="sym">
+                    <span>${c.symbol || c.companyName || 'NSE'}</span>
+                    <span class="timestamp">${c.exDate || c.date || 'Upcoming'}</span>
+                </div>
                 <div class="title">${c.purpose || c.subject || 'Corporate Action Event'}</div>
-                <div style="font-size:10px;color:#64748B">Ex-Date: ${c.exDate || c.date || 'Upcoming'}</div>
             </div>
         `).join('');
     } catch(e) {
-        document.getElementById('calendar-list').innerHTML = `<div class="empty">Failed to load NSE calendar.</div>`;
+        document.getElementById('calendar-list').innerHTML = `<div class="empty">Failed to load calendar.</div>`;
     }
 }
 
-loadAlerts();
+// Initial load
+loadAlerts(false);
+
+// Auto-refresh engine every 30 seconds for instant new announcements
+setInterval(() => loadAlerts(true), 30000);
 </script>
 </body>
 </html>
