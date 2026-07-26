@@ -42,7 +42,7 @@ body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFo
 
   <div class="content">
     <div id="tab-alerts" class="tab active">
-      <div id="alerts-list"><div class="empty">Fetching latest 50 announcements...</div></div>
+      <div id="alerts-list"><div class="empty">Loading announcements...</div></div>
     </div>
     <div id="tab-history" class="tab">
       <input type="text" class="srch" id="hist-search" placeholder="Search history..." oninput="renderHistory()"/>
@@ -74,28 +74,22 @@ function switchTab(tabId, el) {
     if(tabId === 'tab-calendar') loadCalendar();
 }
 
-async function loadAlerts(isBackground = false) {
+async function loadAlerts() {
     try {
         const res = await fetch(BACKEND_URL + '/api/signals');
         const json = await res.json();
-        const newItems = (json.data || []).map(item => {
-            const sym = item.symbol || item.smk || 'NSE';
-            const title = item.subject || item.desc || item.headLine || 'Disclosure Update';
-            const dt = item.date || item.an_dt || new Date().toLocaleString();
+        allSignals = (json.data || []).map((item, idx) => {
+            const sym = item.symbol || 'NSE';
+            const title = item.subject || 'Disclosure Update';
+            const dt = item.date || new Date().toLocaleString();
             const isCrit = /dividend|result|earnings|merger|buyback/i.test(title);
-            const pdf = item.attachement || item.pdfUrl || null;
-            return { id: item.id || Math.random(), sym: sym, title: title, dt: dt, pdf: pdf, isCrit: isCrit };
+            const pdf = item.attachement || null;
+            return { id: item.id || idx, sym: sym, title: title, dt: dt, pdf: pdf, isCrit: isCrit };
         });
-
-        if(newItems.length > 0) {
-            allSignals = newItems;
-            localStorage.setItem('fnoe_nse_history', JSON.stringify(allSignals));
-            renderAlerts();
-        }
+        localStorage.setItem('fnoe_history', JSON.stringify(allSignals));
+        renderAlerts();
     } catch(e) {
-        if(!isBackground) {
-            document.getElementById('alerts-list').innerHTML = `<div class="empty">Connecting to backend feed...</div>`;
-        }
+        document.getElementById('alerts-list').innerHTML = `<div class="empty">Connection error. Check backend.</div>`;
     }
 }
 
@@ -106,7 +100,7 @@ function renderAlerts() {
 }
 
 function buildCard(s) {
-    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.sym + ': ' + s.title)}&details=${encodeURIComponent(s.title)}`;
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.sym + ': ' + s.title)}`;
     const aiSummary = getAiAnalysis(s.title);
     return `
         <div class="card ${s.isCrit ? 'critical' : ''}">
@@ -127,11 +121,10 @@ function buildCard(s) {
 
 function getAiAnalysis(title) {
     const t = title.toLowerCase();
-    if(t.includes('dividend')) return "💰 Positive Cash Flow Event: Expect potential option premium expansion and stock support near ex-date.";
-    if(t.includes('result') || t.includes('earnings')) return "📊 High Volatility Indicator: Review straddle/strangle exposures ahead of market open.";
+    if(t.includes('dividend')) return "💰 Positive Cash Flow Event: Expect option premium expansion near ATM strikes.";
+    if(t.includes('result') || t.includes('earnings')) return "📊 High Volatility Indicator: Review straddle/strangle positions.";
     if(t.includes('buyback')) return "📈 Bullish Indicator: Capital return program signals strong management confidence.";
-    if(t.includes('resignation') || t.includes('cessation')) return "⚠️ Governance Alert: Monitor price action for short-term sentiment pressure.";
-    return "📰 General Corporate Disclosure: Track volume breakout and delivery percentages.";
+    return "📰 General Disclosure: Monitor volume breakout and delivery percentages.";
 }
 
 function toggleAi(id) {
@@ -140,7 +133,7 @@ function toggleAi(id) {
 }
 
 function renderHistory() {
-    const cached = JSON.parse(localStorage.getItem('fnoe_nse_history') || '[]');
+    const cached = JSON.parse(localStorage.getItem('fnoe_history') || '[]');
     const q = (document.getElementById('hist-search').value || '').toLowerCase();
     const filtered = cached.filter(h => !q || h.sym.toLowerCase().includes(q) || h.title.toLowerCase().includes(q));
     const el = document.getElementById('history-list');
@@ -159,10 +152,10 @@ async function loadCalendar() {
         calList.innerHTML = items.map(c => `
             <div class="card" style="border-left-color:#2563EB">
                 <div class="sym">
-                    <span>${c.symbol || c.companyName || 'NSE'}</span>
-                    <span class="timestamp">${c.exDate || c.date || 'Upcoming'}</span>
+                    <span>${c.symbol || 'NSE'}</span>
+                    <span class="timestamp">${c.exDate || 'Upcoming'}</span>
                 </div>
-                <div class="title">${c.purpose || c.subject || 'Corporate Action Event'}</div>
+                <div class="title">${c.purpose || 'Corporate Action Event'}</div>
             </div>
         `).join('');
     } catch(e) {
@@ -170,11 +163,8 @@ async function loadCalendar() {
     }
 }
 
-// Initial load
-loadAlerts(false);
-
-// Auto-refresh engine every 30 seconds for instant new announcements
-setInterval(() => loadAlerts(true), 30000);
+loadAlerts();
+setInterval(loadAlerts, 30000); // Auto-refresh every 30 seconds
 </script>
 </body>
 </html>
