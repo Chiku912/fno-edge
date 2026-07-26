@@ -21,10 +21,7 @@ def fetch_nse(endpoint: str):
     }
     session.headers.update(headers)
     try:
-        # Step 1: Hit NSE homepage to acquire valid session cookies
         session.get("https://www.nseindia.com", timeout=6)
-        
-        # Step 2: Request target endpoint
         url = f"https://www.nseindia.com/api/{endpoint}"
         res = session.get(url, timeout=8)
         if res.status_code == 200:
@@ -40,13 +37,12 @@ def home():
 
 @app.get("/api/signals")
 def get_signals():
-    # NSE Corporate Disclosures / Announcements
     items = fetch_nse("corporate-announcements?index=equities")
-    return {"data": items}
+    # Slice up to 50 latest items
+    return {"data": items[:50]}
 
 @app.get("/api/calendar")
 def get_calendar():
-    # NSE Corporate Actions Calendar
     items = fetch_nse("corporates-corporateActions?index=equities")
     return {"data": items}
 
