@@ -11,7 +11,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://www.bseindia.com/"
+}
 
 @app.get("/")
 def home():
@@ -21,9 +25,11 @@ def home():
 def get_signals():
     try:
         url = "https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w?pageno=1&strType=C"
-        res = requests.get(url, headers=HEADERS, timeout=10)
+        res = requests.get(url, headers=HEADERS, timeout=15)
         data = res.json()
-        return {"data": data.get('Table', []) or data.get('data', [])}
+        # Handle various BSE JSON key structures
+        items = data.get('Table', []) or data.get('Table1', []) or data.get('data', [])
+        return {"data": items}
     except Exception as e:
         return {"data": [], "error": str(e)}
 
@@ -31,9 +37,10 @@ def get_signals():
 def get_calendar():
     try:
         url = "https://api.bseindia.com/BseIndiaAPI/api/CorpAct/w?scripcode=&Purposecode="
-        res = requests.get(url, headers=HEADERS, timeout=10)
+        res = requests.get(url, headers=HEADERS, timeout=15)
         data = res.json()
-        return {"data": data.get('Table', []) or data.get('data', [])}
+        items = data.get('Table', []) or data.get('Table1', []) or data.get('data', [])
+        return {"data": items}
     except Exception as e:
         return {"data": [], "error": str(e)}
 
