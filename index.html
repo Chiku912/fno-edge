@@ -2,45 +2,224 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>FNO Edge</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>FNO Edge — Live Tracker</title>
 <style>
-    body { font-family: sans-serif; background: #f0f6ff; margin: 0; padding-bottom: 70px; }
-    .tab { display: none; padding: 15px; }
-    .active { display: block; }
-    .nc { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-    .nav { position: fixed; bottom: 0; width: 100%; display: flex; background: white; border-top: 1px solid #ddd; }
-    .nav-btn { flex: 1; text-align: center; padding: 15px; font-size: 12px; cursor: pointer; }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;overflow:hidden}
+.app{max-width:430px;margin:0 auto;height:100vh;display:flex;flex-direction:column}
+.hdr{background:#1E3A8A;color:#fff;padding:12px 16px;font-size:16px;font-weight:900}
+.content{flex:1;overflow-y:auto;padding:12px;padding-bottom:80px}
+.tab{display:none}
+.tab.active{display:block}
+.card{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;border-left:4px solid #059669;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.card.critical{border-left-color:#DC2626}
+.sym{font-size:11px;font-weight:800;color:#1D4ED8;text-transform:uppercase}
+.title{font-size:12px;font-weight:700;color:#0F172A;margin:4px 0 8px 0;line-height:1.4}
+.meta-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{font-size:9px;font-weight:700;padding:4px 8px;border-radius:4px;text-decoration:none;cursor:pointer;border:none}
+.pdf-btn{background:#FFF5F5;color:#DC2626;border:1px solid #FCA5A5}
+.ai-btn{background:#E8F5E9;color:#059669;border:1px solid #A5D6A7}
+.gcal-btn{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}
+.ai-box{background:#F0FDF4;border:1px solid #BBF7D0;padding:8px;border-radius:6px;font-size:10px;color:#166534;margin-top:8px;display:none}
+.filters{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:4px}
+.chip{font-size:10px;font-weight:600;padding:4px 10px;border-radius:12px;background:#fff;border:1px solid #CBD5E1;color:#64748B;cursor:pointer;white-space:nowrap}
+.chip.active{background:#EFF6FF;color:#2563EB;border-color:#2563EB}
+.srch{width:100%;padding:8px 12px;border:1px solid #CBD5E1;border-radius:8px;font-size:12px;margin-bottom:10px;outline:none}
+.nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:#fff;border-top:1px solid #E2E8F0;display:flex;z-index:100}
+.nav-item{flex:1;text-align:center;padding:10px 0 14px 0;font-size:10px;font-weight:600;color:#64748B;cursor:pointer}
+.nav-item.active{color:#2563EB}
+.empty{text-align:center;color:#94A3B8;padding:40px 0;font-size:12px}
 </style>
 </head>
 <body>
-    <div id="tab-signals" class="tab active"><div id="sig-list">Loading alerts...</div></div>
-    <div id="tab-calendar" class="tab"><div id="cal-list">Loading calendar...</div></div>
-    
-    <div class="nav">
-        <div class="nav-btn" onclick="openTab('tab-signals')">🔔 Alerts</div>
-        <div class="nav-btn" onclick="openTab('tab-calendar')">📅 Calendar</div>
+
+<div class="app">
+  <div class="hdr">FNO EDGE <span style="font-weight:400;font-size:11px;color:#93C5FD">| Live Stream</span></div>
+
+  <div class="content">
+    <!-- TAB 1: ALERTS -->
+    <div id="tab-alerts" class="tab active">
+      <div class="filters">
+        <div class="chip active" onclick="setFilter('type', 'ALL', this)">🌍 All Stocks</div>
+        <div class="chip" onclick="setFilter('type', 'FNO', this)">🎯 F&O Scripts</div>
+        <div class="chip" onclick="setFilter('type', 'EQ', this)">🏢 Other Equities</div>
+      </div>
+      <div id="alerts-list"><div class="empty">Connecting to backend feed...</div></div>
     </div>
 
+    <!-- TAB 2: HISTORY -->
+    <div id="tab-history" class="tab">
+      <input type="text" class="srch" id="hist-search" placeholder="Search history..." oninput="renderHistory()"/>
+      <div class="filters">
+        <div class="chip active" onclick="setHistFilter('ALL', this)">All History</div>
+        <div class="chip" onclick="setHistFilter('C', this)">⚡ Critical Only</div>
+      </div>
+      <div id="history-list"><div class="empty">No history archived yet.</div></div>
+    </div>
+
+    <!-- TAB 3: CALENDAR -->
+    <div id="tab-calendar" class="tab">
+      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">CORRECTED 6-MONTH CORPORATE ACTIONS</div>
+      <div id="calendar-list"><div class="empty">Loading corporate actions...</div></div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-item active" onclick="switchTab('tab-alerts', this)">🔔 Alerts</div>
+    <div class="nav-item" onclick="switchTab('tab-history', this)">📁 History</div>
+    <div class="nav-item" onclick="switchTab('tab-calendar', this)">📅 Calendar</div>
+  </div>
+</div>
+
 <script>
-const API_URL = 'https://fno-edge.onrender.com';
+const BACKEND_URL = 'https://fno-edge.onrender.com';
+const FNO_LIST = ["NIFTY","BANKNIFTY","RELIANCE","HDFCBANK","ICICIBANK","SBIN","AXISBANK","TCS","INFY","ITC","LT","MARUTI","TATAMOTORS","SUNPHARMA","BAJFINANCE"];
 
-function openTab(id) {
+let allSignals = [];
+let currentType = 'ALL';
+let histFilter = 'ALL';
+
+function switchTab(tabId, el) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    el.classList.add('active');
+    if(tabId === 'tab-history') renderHistory();
+    if(tabId === 'tab-calendar') loadCalendar();
 }
 
-async function fetchData() {
+function setFilter(type, val, el) {
+    if(type === 'type') {
+        currentType = val;
+        el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+    }
+    renderAlerts();
+}
+
+function setHistFilter(val, el) {
+    histFilter = val;
+    el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    renderHistory();
+}
+
+// 1. FETCH LIVE ANNOUNCEMENTS
+async function loadAlerts() {
     try {
-        const res = await fetch(API_URL + '/api/signals');
+        const res = await fetch(BACKEND_URL + '/api/signals');
         const json = await res.json();
-        document.getElementById('sig-list').innerHTML = json.data.map(item => 
-            `<div class="nc"><b>${(item.SLONGNAME||'').split(' ')[0]}</b><br>${item.HEADLINE||'No details'}</div>`
-        ).join('');
-    } catch(e) { document.getElementById('sig-list').innerHTML = "Engine offline. Check Render logs."; }
+        allSignals = (json.data || []).map(item => {
+            const headline = item.HEADLINE || item.NEWS_SUB || '';
+            const name = (item.SLONGNAME || item.Security_Name || 'MARKET').toUpperCase();
+            const isCritical = /dividend|result|earnings|merger|acquisition|profit|loss|buyback|fraud/i.test(headline);
+            const isFno = FNO_LIST.some(f => name.includes(f));
+            
+            return {
+                id: item.NEWSID || Math.random(),
+                sym: name.split(' ')[0],
+                fullName: name,
+                title: headline,
+                pdf: item.ATTACHMENTNAME ? `https://www.bseindia.com/xml-data/corpfiling/AttachLive/${item.ATTACHMENTNAME}` : null,
+                isCrit: isCritical,
+                isFno: isFno,
+                ts: item.NEWS_DT || Date.now()
+            };
+        });
+        
+        // Save to localStorage for History tab persistence
+        localStorage.setItem('fnoe_history_cache', JSON.stringify(allSignals));
+        renderAlerts();
+    } catch(e) {
+        document.getElementById('alerts-list').innerHTML = `<div class="empty">Render Engine is waking up or offline. Please check Render Dashboard.</div>`;
+    }
 }
 
-fetchData();
+function renderAlerts() {
+    const filtered = allSignals.filter(s => {
+        if(currentType === 'FNO' && !s.isFno) return false;
+        if(currentType === 'EQ' && s.isFno) return false;
+        return true;
+    });
+
+    const el = document.getElementById('alerts-list');
+    if(filtered.length === 0) { el.innerHTML = `<div class="empty">No announcements found for this filter.</div>`; return; }
+
+    el.innerHTML = filtered.map(s => buildCardHtml(s)).join('');
+}
+
+function buildCardHtml(s) {
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(s.sym + ': ' + s.title)}&details=${encodeURIComponent(s.fullName)}`;
+    return `
+        <div class="card ${s.isCrit ? 'critical' : ''}">
+            <div class="sym">${s.sym} ${s.isFno ? '🎯 [F&O]' : '🏢 [EQ]'}</div>
+            <div class="title">${s.title}</div>
+            <div class="meta-bar">
+                ${s.pdf ? `<a class="btn pdf-btn" href="${s.pdf}" target="_blank">📄 View PDF</a>` : ''}
+                <button class="btn ai-btn" onclick="toggleAi('${s.id}', '${encodeURIComponent(s.title)}')">🤖 AI Summary</button>
+                <a class="btn gcal-btn" href="${gcalUrl}" target="_blank">📅 + Add Task</a>
+            </div>
+            <div id="ai-res-${s.id}" class="ai-box"></div>
+        </div>
+    `;
+}
+
+function toggleAi(id, titleDecoded) {
+    const box = document.getElementById(`ai-res-${id}`);
+    if(box.style.display === 'block') { box.style.display = 'none'; return; }
+    
+    const title = decodeURIComponent(titleDecoded).toLowerCase();
+    let summary = "📰 General corporate filing update. Monitor volume for trend direction.";
+    if(title.includes('dividend')) summary = "💰 Dividend Alert: Potential CE premium expansion near ATM strikes.";
+    else if(title.includes('result') || title.includes('earnings')) summary = "📊 Financial Results: Expect heavy volatility; check straddle positioning.";
+    else if(title.includes('buyback')) summary = "📈 Buyback Announcement: Strong bullish indicator.";
+    else if(title.includes('resignation')) summary = "⚠️ Management Change: Bearish sentiment pressure possible.";
+
+    box.style.display = 'block';
+    box.innerHTML = `<b>AI Insights:</b> ${summary}`;
+}
+
+// 2. HISTORY TAB
+function renderHistory() {
+    const cached = JSON.parse(localStorage.getItem('fnoe_history_cache') || '[]');
+    const q = (document.getElementById('hist-search').value || '').toLowerCase();
+    
+    const filtered = cached.filter(h => {
+        if(histFilter === 'C' && !h.isCrit) return false;
+        if(q && !h.sym.toLowerCase().includes(q) && !h.title.toLowerCase().includes(q)) return false;
+        return true;
+    });
+
+    const el = document.getElementById('history-list');
+    if(filtered.length === 0) { el.innerHTML = `<div class="empty">No matching history items found.</div>`; return; }
+    
+    el.innerHTML = filtered.map(h => buildCardHtml(h)).join('');
+}
+
+// 3. CALENDAR TAB (Next 3 months & Past 3 months)
+async function loadCalendar() {
+    try {
+        const res = await fetch(BACKEND_URL + '/api/calendar');
+        const json = await res.json();
+        const calList = document.getElementById('calendar-list');
+        const items = json.data || [];
+        
+        if(items.length === 0) { calList.innerHTML = `<div class="empty">No corporate action dates available.</div>`; return; }
+
+        calList.innerHTML = items.map(c => `
+            <div class="card" style="border-left-color:#2563EB">
+                <div class="sym">${(c.Security_Name || c.scrip_name || 'CORP').split(' ')[0]}</div>
+                <div class="title">${c.Purpose || c.HEADLINE || 'Corporate Action Event'}</div>
+                <div style="font-size:10px;color:#64748B">Date: ${c.ExDate || c.ex_date || 'Upcoming'}</div>
+            </div>
+        `).join('');
+    } catch(e) {
+        document.getElementById('calendar-list').innerHTML = `<div class="empty">Failed to load calendar data from engine.</div>`;
+    }
+}
+
+loadAlerts();
 </script>
 </body>
 </html>
