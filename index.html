@@ -1,72 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>FNO Edge</title>
 <style>
-body{background:#F8FAFC;font-family:system-ui;margin:0;padding:0}
-.tab{display:none;padding:15px;padding-bottom:80px}
-.tab.active{display:block}
-.card{background:#fff;padding:15px;margin-bottom:10px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-.nav{position:fixed;bottom:0;width:100%;display:flex;background:#fff;border-top:1px solid #e2e8f0}
-.nav-item{flex:1;text-align:center;padding:15px;font-size:12px;font-weight:600;cursor:pointer}
-.crit{border-left:4px solid #ef4444}
-.ai-btn{background:#dcfce7;color:#166534;padding:5px 10px;border-radius:5px;font-size:10px;display:inline-block;cursor:pointer}
+    body { font-family: sans-serif; background: #f0f6ff; margin: 0; padding-bottom: 70px; }
+    .tab { display: none; padding: 15px; }
+    .active { display: block; }
+    .nc { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .nav { position: fixed; bottom: 0; width: 100%; display: flex; background: white; border-top: 1px solid #ddd; }
+    .nav-btn { flex: 1; text-align: center; padding: 15px; font-size: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
-<div id="scr">
-    <div id="tab-signals" class="tab active">
-        <div id="sig-list"></div>
+    <div id="tab-signals" class="tab active"><div id="sig-list">Loading alerts...</div></div>
+    <div id="tab-calendar" class="tab"><div id="cal-list">Loading calendar...</div></div>
+    
+    <div class="nav">
+        <div class="nav-btn" onclick="openTab('tab-signals')">🔔 Alerts</div>
+        <div class="nav-btn" onclick="openTab('tab-calendar')">📅 Calendar</div>
     </div>
-    <div id="tab-history" class="tab">
-        <input type="text" id="hist-srch" class="srch" placeholder="Filter history..." oninput="renderHistory()"/>
-        <div id="hist-list"></div>
-    </div>
-    <div id="tab-calendar" class="tab">
-        <div id="cal-list"></div>
-    </div>
-</div>
-
-<div class="nav">
-    <div class="nav-item" onclick="switchTab('tab-signals')">🔔 Alerts</div>
-    <div class="nav-item" onclick="switchTab('tab-history')">📁 History</div>
-    <div class="nav-item" onclick="switchTab('tab-calendar')">📅 Calendar</div>
-</div>
 
 <script>
-const BACKEND = 'https://fno-edge.onrender.com';
+const API_URL = 'https://fno-edge.onrender.com';
 
-function switchTab(id) {
+function openTab(id) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.getElementById(id).classList.add('active');
 }
 
-async function loadData() {
-    // Fetch from your backend (no proxy errors)
-    const sigRes = await fetch(BACKEND + '/api/signals');
-    const signals = (await sigRes.json()).data;
-    
-    const list = document.getElementById('sig-list');
-    list.innerHTML = signals.map(s => `
-        <div class="card ${s.HEADLINE.match(/dividend|result/i) ? 'crit' : ''}">
-            <b>${(s.SLONGNAME||'').split(' ')[0]}</b><br>${s.HEADLINE}<br>
-            <div style="margin-top:10px">
-                <a href="https://www.bseindia.com/xml-data/corpfiling/AttachLive/${s.ATTACHMENTNAME}" target="_blank">📄 PDF</a>
-                <span class="ai-btn" onclick="summarize('${s.NEWSID}')">🤖 AI Summary</span>
-                <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Review:${s.SLONGNAME}&details=${s.HEADLINE}" target="_blank">📅 GCal</a>
-            </div>
-            <div id="sum-${s.NEWSID}"></div>
-        </div>
-    `).join('');
+async function fetchData() {
+    try {
+        const res = await fetch(API_URL + '/api/signals');
+        const json = await res.json();
+        document.getElementById('sig-list').innerHTML = json.data.map(item => 
+            `<div class="nc"><b>${(item.SLONGNAME||'').split(' ')[0]}</b><br>${item.HEADLINE||'No details'}</div>`
+        ).join('');
+    } catch(e) { document.getElementById('sig-list').innerHTML = "Engine offline. Check Render logs."; }
 }
 
-function summarize(id) {
-    document.getElementById('sum-'+id).innerHTML = "<i>Analyzing with AI...</i>";
-    // Logic to call Gemini API goes here
-}
-
-loadData();
+fetchData();
 </script>
 </body>
-  </html>
+</html>
