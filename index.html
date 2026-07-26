@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>FNO Edge</title>
+<title>FNO Edge — NSE Live</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;overflow:hidden}
@@ -19,9 +19,7 @@ body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFo
 .meta-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .btn{font-size:9px;font-weight:700;padding:4px 8px;border-radius:4px;text-decoration:none;cursor:pointer;border:none}
 .pdf-btn{background:#FFF5F5;color:#DC2626;border:1px solid #FCA5A5}
-.ai-btn{background:#E8F5E9;color:#059669;border:1px solid #A5D6A7}
 .gcal-btn{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}
-.ai-box{background:#F0FDF4;border:1px solid #BBF7D0;padding:8px;border-radius:6px;font-size:10px;color:#166534;margin-top:8px;display:none}
 .srch{width:100%;padding:8px 12px;border:1px solid #CBD5E1;border-radius:8px;font-size:12px;margin-bottom:10px;outline:none}
 .nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:#fff;border-top:1px solid #E2E8F0;display:flex;z-index:100}
 .nav-item{flex:1;text-align:center;padding:10px 0 14px 0;font-size:10px;font-weight:600;color:#64748B;cursor:pointer}
@@ -32,19 +30,19 @@ body{background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFo
 <body>
 
 <div class="app">
-  <div class="hdr">FNO EDGE <span style="font-weight:400;font-size:11px;color:#93C5FD">| Live Stream</span></div>
+  <div class="hdr">FNO EDGE <span style="font-weight:400;font-size:11px;color:#93C5FD">| NSE Feed</span></div>
 
   <div class="content">
     <div id="tab-alerts" class="tab active">
-      <div id="alerts-list"><div class="empty">Loading alerts...</div></div>
+      <div id="alerts-list"><div class="empty">Fetching live NSE announcements...</div></div>
     </div>
     <div id="tab-history" class="tab">
       <input type="text" class="srch" id="hist-search" placeholder="Search history..." oninput="renderHistory()"/>
       <div id="history-list"><div class="empty">No history archived.</div></div>
     </div>
     <div id="tab-calendar" class="tab">
-      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">CORPORATE ACTIONS CALENDAR</div>
-      <div id="calendar-list"><div class="empty">Loading calendar...</div></div>
+      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">NSE CORPORATE ACTIONS CALENDAR</div>
+      <div id="calendar-list"><div class="empty">Fetching NSE corporate actions...</div></div>
     </div>
   </div>
 
@@ -73,22 +71,22 @@ async function loadAlerts() {
         const res = await fetch(BACKEND_URL + '/api/signals');
         const json = await res.json();
         allSignals = (json.data || []).map(item => {
-            const name = (item.SLONGNAME || item.symbol || 'MARKET').toUpperCase();
-            const title = item.HEADLINE || item.subject || 'Corporate Disclosure';
+            const sym = item.symbol || item.smk || 'NSE';
+            const title = item.subject || item.desc || item.headLine || 'Disclosure Update';
             const isCrit = /dividend|result|earnings|merger|buyback/i.test(title);
-            const pdf = item.ATTACHMENTNAME ? `https://www.bseindia.com/xml-data/corpfiling/AttachLive/${item.ATTACHMENTNAME}` : null;
-            return { id: item.NEWSID || Math.random(), sym: name.split(' ')[0], title: title, pdf: pdf, isCrit: isCrit };
+            const pdf = item.attachement || item.pdfUrl || null;
+            return { id: item.id || Math.random(), sym: sym, title: title, pdf: pdf, isCrit: isCrit };
         });
-        localStorage.setItem('fnoe_history', JSON.stringify(allSignals));
+        localStorage.setItem('fnoe_nse_history', JSON.stringify(allSignals));
         renderAlerts();
     } catch(e) {
-        document.getElementById('alerts-list').innerHTML = `<div class="empty">Connection error. Check Render backend.</div>`;
+        document.getElementById('alerts-list').innerHTML = `<div class="empty">Failed to reach backend engine.</div>`;
     }
 }
 
 function renderAlerts() {
     const el = document.getElementById('alerts-list');
-    if(allSignals.length === 0) { el.innerHTML = `<div class="empty">No announcements available.</div>`; return; }
+    if(allSignals.length === 0) { el.innerHTML = `<div class="empty">No live NSE announcements found at this moment.</div>`; return; }
     el.innerHTML = allSignals.map(s => buildCard(s)).join('');
 }
 
@@ -107,7 +105,7 @@ function buildCard(s) {
 }
 
 function renderHistory() {
-    const cached = JSON.parse(localStorage.getItem('fnoe_history') || '[]');
+    const cached = JSON.parse(localStorage.getItem('fnoe_nse_history') || '[]');
     const q = (document.getElementById('hist-search').value || '').toLowerCase();
     const filtered = cached.filter(h => !q || h.sym.toLowerCase().includes(q) || h.title.toLowerCase().includes(q));
     const el = document.getElementById('history-list');
@@ -121,17 +119,17 @@ async function loadCalendar() {
         const json = await res.json();
         const calList = document.getElementById('calendar-list');
         const items = json.data || [];
-        if(items.length === 0) { calList.innerHTML = `<div class="empty">No corporate action events available.</div>`; return; }
+        if(items.length === 0) { calList.innerHTML = `<div class="empty">No corporate actions found from NSE.</div>`; return; }
 
         calList.innerHTML = items.map(c => `
             <div class="card" style="border-left-color:#2563EB">
-                <div class="sym">${(c.Security_Name || c.symbol || 'CORP').split(' ')[0]}</div>
-                <div class="title">${c.Purpose || c.purpose || 'Corporate Action Event'}</div>
-                <div style="font-size:10px;color:#64748B">Ex-Date: ${c.ExDate || c.exDate || 'Upcoming'}</div>
+                <div class="sym">${c.symbol || c.companyName || 'NSE CORP'}</div>
+                <div class="title">${c.purpose || c.subject || 'Corporate Action Event'}</div>
+                <div style="font-size:10px;color:#64748B">Ex-Date: ${c.exDate || c.date || 'Upcoming'}</div>
             </div>
         `).join('');
     } catch(e) {
-        document.getElementById('calendar-list').innerHTML = `<div class="empty">Failed to load calendar data.</div>`;
+        document.getElementById('calendar-list').innerHTML = `<div class="empty">Failed to load NSE calendar.</div>`;
     }
 }
 
